@@ -475,7 +475,7 @@
                                 <label for="karrasaContent" class="block text-sm font-medium mb-1">المحتوى</label>
                                 <textarea id="karrasaContent" rows="15" class="data-table textarea w-full"></textarea>
                             </div>
-                            <div class="mt-4 flex justify-between items-center">
+                            <div id="karrasa-editor-buttons" class="mt-4 flex justify-between items-center">
                                 <div>
                                     <button id="karrasa-import-word" class="bg-teal-600 text-white text-sm rounded-lg px-4 py-2 hover:bg-teal-700 flex items-center gap-2"><span>📤</span> استيراد من Word</button>
                                     <button id="karrasa-export-word" class="bg-green-600 text-white text-sm rounded-lg px-4 py-2 hover:bg-green-700 flex items-center gap-2"><span>⬇️</span> تحميل كـ Word</button>
@@ -1016,7 +1016,7 @@
                     });
                 });
 
-                // ===== DASHBOARD LOGIC (Unchanged) =====
+                // ===== DASHBOARD LOGIC =====
                 function renderDashboard() {
                     const kpiTotal = document.getElementById('kpi-total'), kpiOngoing = document.getElementById('kpi-ongoing'), kpiPrevious = document.getElementById('kpi-previous'), kpiProposed = document.getElementById('kpi-proposed');
                     const barChartCanvas = document.getElementById('barChart');
@@ -1024,7 +1024,37 @@
                     if(kpiOngoing) kpiOngoing.textContent = projects.filter(p => p.status === 'المشاريع الجاري طرحها').length;
                     if(kpiPrevious) kpiPrevious.textContent = projects.filter(p => p.status === 'المشاريع السابقة').length;
                     if(kpiProposed) kpiProposed.textContent = projects.filter(p => p.status === 'المشاريع المقترحة').length;
-                    if(barChartCanvas){ const barCtx = barChartCanvas.getContext('2d'); const regionData = projects.reduce((acc, p) => ({ ...acc, [p.region]: (acc[p.region] || 0) + 1 }), {}); if (barChart) barChart.destroy(); barChart = new Chart(barCtx, { type: 'bar', data: { labels: Object.keys(regionData), datasets: [{ data: Object.values(regionData), backgroundColor: 'var(--olive-dark)' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } }); }
+                     if(barChartCanvas){
+                        const barCtx = barChartCanvas.getContext('2d');
+                        const regionData = projects.reduce((acc, p) => ({ ...acc, [p.region]: (acc[p.region] || 0) + 1 }), {});
+                        
+                        const colorPalette = [ '#3D4A3A', '#DAA520', '#6F7D6B', '#F2E3B3', '#4B5563', '#8E805B' ];
+
+                        if (barChart) barChart.destroy();
+                        barChart = new Chart(barCtx, {
+                            type: 'bar',
+                            data: {
+                                labels: Object.keys(regionData),
+                                datasets: [{
+                                    label: 'عدد المشاريع',
+                                    data: Object.values(regionData),
+                                    backgroundColor: colorPalette,
+                                    borderColor: colorPalette.map(c => c + 'B3'),
+                                    borderWidth: 1
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                    legend: { display: false }
+                                },
+                                scales: {
+                                    y: { beginAtZero: true, ticks: { stepSize: 1 } }
+                                }
+                            }
+                        });
+                    }
                 }
 
                 // ===== PROJECTS PAGE LOGIC (Unchanged) =====
@@ -1480,24 +1510,30 @@
                     renderKarrasaList();
                 }
 
-                function showKarrasaEditorView(karrasaId = 'new') {
+                function showKarrasaEditorView(karrasaId = 'new', isViewOnly = false) {
                     document.getElementById('karrasa-list-view').classList.add('hidden');
                     document.getElementById('karrasa-editor-view').classList.remove('hidden');
                     currentEditingKarrasaId = karrasaId;
 
                     const nameInput = document.getElementById('karrasaName');
                     const contentInput = document.getElementById('karrasaContent');
+                    const editorButtons = document.getElementById('karrasa-editor-buttons');
 
-                    if(karrasaId === 'new') {
+                    let karrasa;
+                    if (karrasaId === 'new') {
+                        isViewOnly = false; // Can't view a new one
                         nameInput.value = '';
                         contentInput.value = '';
                     } else {
-                        const karrasa = karrasaTemplates.find(k => k.id == karrasaId);
-                        if(karrasa) {
+                        karrasa = karrasaTemplates.find(k => k.id == karrasaId);
+                        if (karrasa) {
                             nameInput.value = karrasa.name;
                             contentInput.value = karrasa.content;
                         }
                     }
+                    nameInput.disabled = isViewOnly;
+                    contentInput.disabled = isViewOnly;
+                    editorButtons.style.display = isViewOnly ? 'none' : 'flex';
                 }
                 
                 function renderKarrasaList() {
@@ -1510,6 +1546,7 @@
                         <div class="bg-gray-50 p-3 rounded-lg flex justify-between items-center border">
                             <h4 class="font-bold">${k.name}</h4>
                             <div class="space-x-2 space-x-reverse">
+                                 <button class="view-karrasa-btn text-green-600 hover:text-green-800" data-id="${k.id}">عرض</button>
                                  <button class="edit-karrasa-btn text-blue-600 hover:text-blue-800" data-id="${k.id}">تعديل</button>
                                  <button class="delete-karrasa-btn text-red-600 hover:text-red-800" data-id="${k.id}">حذف</button>
                             </div>
@@ -1517,13 +1554,17 @@
                     `).join('');
                 }
                 
-                document.getElementById('add-new-karrasa-btn')?.addEventListener('click', () => showKarrasaEditorView('new'));
+                document.getElementById('add-new-karrasa-btn')?.addEventListener('click', () => showKarrasaEditorView('new', false));
                 document.getElementById('cancel-karrasa-edit')?.addEventListener('click', showKarrasaListView);
                 
                 document.getElementById('karrasa-list').addEventListener('click', e => {
                     const editBtn = e.target.closest('.edit-karrasa-btn');
+                    const viewBtn = e.target.closest('.view-karrasa-btn');
                     if (editBtn) {
-                        showKarrasaEditorView(editBtn.dataset.id);
+                        showKarrasaEditorView(editBtn.dataset.id, false);
+                    }
+                    if (viewBtn) {
+                        showKarrasaEditorView(viewBtn.dataset.id, true);
                     }
                     // Add delete logic here
                 });
